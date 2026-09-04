@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Finanzas del Hogar</title>
   
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -20,13 +19,9 @@
     }
   </script>
 
-  <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- SheetJS & jsPDF -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -42,14 +37,16 @@
 
   <script>
     // ==========================================
-    // 1. CONFIGURACIÓN SUPABASE (COLOCA TUS CREDENCIALES)
+    // 1. CONFIGURACIÓN SUPABASE
     // ==========================================
-    const SUPABASE_URL = "https://ioagcqakgsldsxzualea.supabase.co";
-    const SUPABASE_ANON_KEY = "sb_publishable_bfGeIRo6S-dYpmi-nVWNrg_xFSab8kv";
+    const SUPABASE_URL = "https://tu-proyecto.supabase.co"; // <-- Coloca tu URL aquí
+    const SUPABASE_ANON_KEY = "tu-clave-anon-publica";     // <-- Coloca tu Clave Anon aquí
+    
+    // Se usa 'sbClient' para evitar el conflicto con la variable global 'supabase' de la librería
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ==========================================
-    // 2. ESTADO GLOBAL REACTIVO SIMPLE
+    // 2. ESTADO GLOBAL
     // ==========================================
     const state = {
       user: JSON.parse(localStorage.getItem('hogar_user')) || null,
@@ -76,7 +73,6 @@
       renderApp();
     }
 
-    // Inicializar DarkMode al cargar
     if (state.darkMode) document.documentElement.classList.add('dark');
 
     // ==========================================
@@ -87,10 +83,10 @@
       state.loading = true;
       try {
         const [catRes, userRes, expRes, incRes] = await Promise.all([
-          supabase.from('categorias').select('*'),
-          supabase.from('usuarios').select('*').order('nombre'),
-          supabase.from('gastos').select('*, usuarios(nombre, username), categorias(nombre, color, icono)').order('fecha', { ascending: false }),
-          supabase.from('ingresos').select('*').order('fecha', { ascending: false })
+          sbClient.from('categorias').select('*'),
+          sbClient.from('usuarios').select('*').order('nombre'),
+          sbClient.from('gastos').select('*, usuarios(nombre, username), categorias(nombre, color, icono)').order('fecha', { ascending: false }),
+          sbClient.from('ingresos').select('*').order('fecha', { ascending: false })
         ]);
 
         state.categories = catRes.data || [];
@@ -98,7 +94,7 @@
         state.expenses = expRes.data || [];
         state.incomes = incRes.data || [];
 
-        // Si el usuario actual es miembro, refrescar sus datos locales
+        // Si es miembro, sincronizar su saldo actualizado
         if (state.user.rol === 'member') {
           const freshMe = state.members.find(m => m.id === state.user.id);
           if (freshMe) {
@@ -124,29 +120,34 @@
       const errorEl = document.getElementById('login-error');
       errorEl.classList.add('hidden');
 
-      const pinHash = await sha256(pin);
-      const { data, error } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('username', username)
-        .eq('pin_hash', pinHash)
-        .single();
+      try {
+        const pinHash = await sha256(pin);
+        const { data, error } = await sbClient
+          .from('usuarios')
+          .select('*')
+          .eq('username', username)
+          .eq('pin_hash', pinHash)
+          .single();
 
-      if (error || !data) {
-        errorEl.textContent = 'Usuario o PIN incorrecto';
+        if (error || !data) {
+          errorEl.textContent = 'Usuario o PIN incorrecto';
+          errorEl.classList.remove('hidden');
+          return;
+        }
+
+        if (data.esta_bloqueado) {
+          errorEl.textContent = 'Este usuario se encuentra bloqueado.';
+          errorEl.classList.remove('hidden');
+          return;
+        }
+
+        state.user = data;
+        localStorage.setItem('hogar_user', JSON.stringify(data));
+        await fetchData();
+      } catch (err) {
+        errorEl.textContent = 'Error de conexión con la base de datos';
         errorEl.classList.remove('hidden');
-        return;
       }
-
-      if (data.esta_bloqueado) {
-        errorEl.textContent = 'Este usuario se encuentra bloqueado por el administrador.';
-        errorEl.classList.remove('hidden');
-        return;
-      }
-
-      state.user = data;
-      localStorage.setItem('hogar_user', JSON.stringify(data));
-      await fetchData();
     }
 
     function handleLogout() {
@@ -156,7 +157,7 @@
     }
 
     // ==========================================
-    // 5. COMPONENTES Y VISTAS
+    // 5. INTERFAZ Y RENDERIZADO
     // ==========================================
     function renderApp() {
       const root = document.getElementById('app');
@@ -187,7 +188,7 @@
             </div>
             <div>
               <h1 class="text-base font-bold leading-tight">Finanzas del Hogar</h1>
-              <p class="text-xs text-slate-500 dark:text-slate-400">Hola, ${state.user.nombre} (${state.user.rol === 'admin' ? 'Admin' : 'Miembro'})</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">${state.user.nombre} • <span class="capitalize font-semibold">${state.user.rol === 'admin' ? 'Administrador' : 'Miembro'}</span></p>
             </div>
           </div>
           <div class="flex items-center space-x-2">
@@ -225,7 +226,7 @@
       renderApp();
     }
 
-    // --- VISTA DASHBOARD ---
+    // --- DASHBOARD ---
     function renderDashboard() {
       const totalIngresos = state.incomes.reduce((acc, i) => acc + Number(i.monto), 0);
       const totalGastos = state.expenses.reduce((acc, g) => acc + Number(g.monto), 0);
@@ -233,7 +234,6 @@
       const saldoCajaReal = totalIngresos - totalGastos;
       const fondoLibre = totalIngresos - totalCreditos;
 
-      // Datos miembro individual
       const misGastos = state.expenses.filter(g => g.usuario_id === state.user.id);
       const totalGastadoPersonal = misGastos.reduce((acc, g) => acc + Number(g.monto), 0);
       const creditoPersonal = Number(state.user.credito_asignado || 0);
@@ -245,7 +245,6 @@
       if (pctConsumido > 90) colorBarra = 'bg-rose-500';
 
       return `
-        <!-- Acciones superiores para PC -->
         <div class="hidden sm:flex mb-6 space-x-2">
           <button onclick="switchView('dashboard')" class="px-4 py-2 rounded-lg font-medium text-sm ${state.view === 'dashboard' ? 'bg-brand-500 text-white' : 'bg-slate-200 dark:bg-slate-800'}">Dashboard</button>
           ${state.user.rol === 'admin' ? `
@@ -254,7 +253,6 @@
           <button onclick="switchView('reports')" class="px-4 py-2 rounded-lg font-medium text-sm ${state.view === 'reports' ? 'bg-brand-500 text-white' : 'bg-slate-200 dark:bg-slate-800'}">Reportes y Exportación</button>
         </div>
 
-        <!-- Vista Miembro: Bolsa de Presupuesto -->
         ${state.user.rol === 'member' ? `
           <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 mb-6 shadow-sm">
             <div class="flex justify-between items-start mb-3">
@@ -267,7 +265,6 @@
                 <i data-lucide="plus" class="w-4 h-4 mr-1"></i> Gasto
               </button>
             </div>
-            <!-- Barra de Consumo -->
             <div class="space-y-1">
               <div class="flex justify-between text-xs font-medium text-slate-500">
                 <span>Gastado: Bs. ${totalGastadoPersonal.toFixed(2)}</span>
@@ -280,7 +277,6 @@
           </div>
         ` : ''}
 
-        <!-- Tarjetas Indicadores Generales (Admin & Member) -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
           <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
             <span class="text-xs text-slate-500">Saldo Real en Caja</span>
@@ -314,7 +310,6 @@
           </div>
         ` : ''}
 
-        <!-- Últimos Movimientos -->
         <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5">
           <h3 class="font-bold text-sm mb-3">Últimos Consumos Registrados</h3>
           <div class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -337,7 +332,7 @@
       `;
     }
 
-    // --- VISTA GESTIÓN MIEMBROS (ADMIN) ---
+    // --- MIEMBROS ---
     function renderMembersView() {
       return `
         <div class="flex justify-between items-center mb-6">
@@ -400,7 +395,7 @@
       `;
     }
 
-    // --- VISTA REPORTES & GRÁFICOS ---
+    // --- REPORTES ---
     function renderReportsView() {
       return `
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -415,7 +410,6 @@
           </div>
         </div>
 
-        <!-- Filtros Rápidos -->
         <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 mb-6 flex flex-wrap gap-3">
           <select id="filter-range" onchange="updateFilters()" class="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
             <option value="this_month">Este Mes</option>
@@ -434,7 +428,6 @@
           </select>
         </div>
 
-        <!-- Canvas Gráficos -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Gastos por Categoría</h4>
@@ -450,7 +443,6 @@
 
     function getFilteredExpenses() {
       return state.expenses.filter(g => {
-        // Rango de fechas
         if (state.filter.range === 'this_month') {
           const now = new Date();
           const gDate = new Date(g.fecha);
@@ -460,10 +452,7 @@
           if (diffDays > 7) return false;
         }
 
-        // Filtro miembro
         if (state.filter.memberId !== 'all' && g.usuario_id !== state.filter.memberId) return false;
-
-        // Filtro categoría
         if (state.filter.catId !== 'all' && g.categoria_id !== state.filter.catId) return false;
 
         return true;
@@ -479,10 +468,8 @@
 
     function postRenderCharts() {
       if (state.view !== 'reports') return;
-
       const filtered = getFilteredExpenses();
 
-      // 1. Gráfico Categorías (Doughnut)
       const catMap = {};
       state.categories.forEach(c => catMap[c.nombre] = { total: 0, color: c.color });
       filtered.forEach(g => {
@@ -507,7 +494,6 @@
         });
       }
 
-      // 2. Gráfico Miembros (Bar)
       const memMap = {};
       state.members.forEach(m => memMap[m.nombre] = 0);
       filtered.forEach(g => {
@@ -533,10 +519,9 @@
       }
     }
 
-    // --- MODALES (HTML) ---
+    // --- MODALES ---
     function renderModals() {
       return `
-        <!-- Modal Gasto -->
         <div id="modal-gasto" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-4">Registrar Consumo / Gasto</h3>
@@ -568,7 +553,6 @@
           </div>
         </div>
 
-        <!-- Modal Ingreso (Admin) -->
         <div id="modal-ingreso" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-4">Registrar Ingreso Central</h3>
@@ -597,7 +581,6 @@
           </div>
         </div>
 
-        <!-- Modal Crear Usuario -->
         <div id="modal-crear-usuario" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-4">Crear Miembro de la Familia</h3>
@@ -629,7 +612,6 @@
           </div>
         </div>
 
-        <!-- Modal Recargar Presupuesto -->
         <div id="modal-recargar" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-base mb-1">Recargar Crédito</h3>
@@ -650,7 +632,7 @@
       `;
     }
 
-    // --- ACCIONES BACKEND / SUPABASE ---
+    // --- ACCIONES SUPABASE ---
     async function handleGuardarGasto(e) {
       e.preventDefault();
       const form = e.target;
@@ -665,7 +647,7 @@
         p_fecha: form.fecha.value
       };
 
-      const { data, error } = await supabase.rpc('registrar_gasto_con_validacion', payload);
+      const { data, error } = await sbClient.rpc('registrar_gasto_con_validacion', payload);
 
       if (error || !data.success) {
         errorEl.textContent = data ? data.message : 'Error al registrar el gasto';
@@ -680,7 +662,7 @@
     async function handleGuardarIngreso(e) {
       e.preventDefault();
       const form = e.target;
-      await supabase.from('ingresos').insert([{
+      await sbClient.from('ingresos').insert([{
         monto: parseFloat(form.monto.value),
         fuente: form.fuente.value.trim(),
         descripcion: form.descripcion.value.trim(),
@@ -695,7 +677,7 @@
       const form = e.target;
       const pinHash = await sha256(form.pin.value.trim());
 
-      await supabase.from('usuarios').insert([{
+      await sbClient.from('usuarios').insert([{
         nombre: form.nombre.value.trim(),
         username: form.username.value.trim().toLowerCase(),
         pin_hash: pinHash,
@@ -709,7 +691,7 @@
     async function handleAsignarCredito(e) {
       e.preventDefault();
       const form = e.target;
-      await supabase.from('usuarios')
+      await sbClient.from('usuarios')
         .update({ credito_asignado: parseFloat(form.credito.value) })
         .eq('id', form.user_id.value);
 
@@ -718,13 +700,13 @@
     }
 
     async function toggleBloqueoUsuario(id, estadoActual) {
-      await supabase.from('usuarios').update({ esta_bloqueado: !estadoActual }).eq('id', id);
+      await sbClient.from('usuarios').update({ esta_bloqueado: !estadoActual }).eq('id', id);
       await fetchData();
     }
 
     async function eliminarUsuario(id) {
-      if (confirm('¿Seguro que deseas eliminar este miembro? Se eliminarán todos sus consumos asociados.')) {
-        await supabase.from('usuarios').delete().eq('id', id);
+      if (confirm('¿Seguro que deseas eliminar este miembro? Se borrarán sus consumos asociados.')) {
+        await sbClient.from('usuarios').delete().eq('id', id);
         await fetchData();
       }
     }
@@ -732,14 +714,14 @@
     async function resetSystem() {
       if (confirm('ADVERTENCIA: Se borrarán todos los ingresos y gastos registrados. ¿Deseas continuar?')) {
         await Promise.all([
-          supabase.from('gastos').delete().neq('monto', -1),
-          supabase.from('ingresos').delete().neq('monto', -1)
+          sbClient.from('gastos').delete().neq('monto', -1),
+          sbClient.from('ingresos').delete().neq('monto', -1)
         ]);
         await fetchData();
       }
     }
 
-    // --- UTILIDADES MODALES ---
+    // --- UTILIDADES ---
     function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
     function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
     function openModalRecargar(id, nombre) {
@@ -748,7 +730,7 @@
       openModal('modal-recargar');
     }
 
-    // --- EXPORTACIÓN EXCEL & PDF ---
+    // --- EXPORTACIONES ---
     function exportToExcel() {
       const rows = getFilteredExpenses().map(g => ({
         Fecha: g.fecha,
@@ -828,7 +810,9 @@
     // 6. INICIALIZACIÓN
     // ==========================================
     renderApp();
-    if (state.user) fetchData();
+    if (state.user) {
+      fetchData();
+    }
   </script>
 </body>
 </html>
