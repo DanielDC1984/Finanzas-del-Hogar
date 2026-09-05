@@ -37,12 +37,12 @@
 
   <script>
     // ==========================================
-    // 1. CONFIGURACIÓN SUPABASE
+    // 1. CONFIGURACIÓN SUPABASE CON TUS CREDENCIALES
     // ==========================================
     const SUPABASE_URL = "https://ioagcqakgsldsxzualea.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_bfGeIRo6S-dYpmi-nVWNrg_xFSab8kv";
     
-    // Se usa 'sbClient' para evitar el conflicto con la variable global 'supabase' de la librería
+    // Instancia del cliente Supabase
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ==========================================
@@ -94,13 +94,11 @@
         state.expenses = expRes.data || [];
         state.incomes = incRes.data || [];
 
-        // Si es miembro, sincronizar su saldo actualizado
-        if (state.user.rol === 'member') {
-          const freshMe = state.members.find(m => m.id === state.user.id);
-          if (freshMe) {
-            state.user = freshMe;
-            localStorage.setItem('hogar_user', JSON.stringify(freshMe));
-          }
+        // Si es miembro o admin, actualizar la sesión activa
+        const freshMe = state.members.find(m => m.id === state.user.id);
+        if (freshMe) {
+          state.user = freshMe;
+          localStorage.setItem('hogar_user', JSON.stringify(freshMe));
         }
       } catch (err) {
         console.error("Error al cargar datos:", err);
@@ -118,7 +116,7 @@
       const username = e.target.username.value.trim().toLowerCase().replace('@', '');
       const pin = e.target.pin.value.trim();
       const errorEl = document.getElementById('login-error');
-      errorEl.classList.add('hidden');
+      if (errorEl) errorEl.classList.add('hidden');
 
       try {
         const pinHash = await sha256(pin);
@@ -130,35 +128,66 @@
           .single();
 
         if (error || !data) {
-          errorEl.textContent = 'Usuario o PIN incorrecto';
-          errorEl.classList.remove('hidden');
+          if (errorEl) {
+            errorEl.textContent = 'Usuario o PIN incorrecto';
+            errorEl.classList.remove('hidden');
+          }
           return;
         }
 
         if (data.esta_bloqueado) {
-          errorEl.textContent = 'Este usuario se encuentra bloqueado.';
-          errorEl.classList.remove('hidden');
+          if (errorEl) {
+            errorEl.textContent = 'Este usuario se encuentra bloqueado.';
+            errorEl.classList.remove('hidden');
+          }
           return;
         }
 
         state.user = data;
         localStorage.setItem('hogar_user', JSON.stringify(data));
+        state.view = 'dashboard';
         await fetchData();
       } catch (err) {
-        errorEl.textContent = 'Error de conexión con la base de datos';
-        errorEl.classList.remove('hidden');
+        if (errorEl) {
+          errorEl.textContent = 'Error de conexión con la base de datos';
+          errorEl.classList.remove('hidden');
+        }
       }
     }
 
     function handleLogout() {
       state.user = null;
       localStorage.removeItem('hogar_user');
+      state.view = 'dashboard';
       renderApp();
     }
 
     // ==========================================
     // 5. INTERFAZ Y RENDERIZADO
     // ==========================================
+    function switchView(viewName) {
+      state.view = viewName;
+      renderApp();
+    }
+
+    function renderNavigationTabs() {
+      return `
+        <div class="flex items-center space-x-2 mb-6 border-b border-slate-200 dark:border-slate-800 pb-3">
+          <button type="button" onclick="switchView('dashboard')" class="px-4 py-2 rounded-xl font-medium text-sm transition-colors ${state.view === 'dashboard' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+            Dashboard
+          </button>
+          ${state.user.rol === 'admin' ? `
+            <button type="button" onclick="switchView('members')" class="px-4 py-2 rounded-xl font-medium text-sm transition-colors ${state.view === 'members' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+              Gestión Miembros
+            </button>
+          ` : ''}
+          <button type="button" onclick="switchView('reports')" class="px-4 py-2 rounded-xl font-medium text-sm transition-colors ${state.view === 'reports' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+            Reportes y Exportación
+          </button>
+        </div>
+      `;
+    }
+
     function renderApp() {
       const root = document.getElementById('app');
       if (!state.user) {
@@ -166,7 +195,8 @@
       } else {
         root.innerHTML = `
           ${renderHeader()}
-          <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 pb-20">
+          <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 pb-24">
+            ${renderNavigationTabs()}
             ${state.view === 'dashboard' ? renderDashboard() : ''}
             ${state.view === 'members' && state.user.rol === 'admin' ? renderMembersView() : ''}
             ${state.view === 'reports' ? renderReportsView() : ''}
@@ -174,7 +204,9 @@
           ${renderBottomNav()}
           ${renderModals()}
         `;
-        postRenderCharts();
+        if (state.view === 'reports') {
+          postRenderCharts();
+        }
       }
       lucide.createIcons();
     }
@@ -183,19 +215,19 @@
       return `
         <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-20 px-4 py-3 sm:px-6 flex items-center justify-between shadow-sm">
           <div class="flex items-center space-x-3">
-            <div class="p-2 bg-brand-500 rounded-xl text-white">
+            <div class="p-2 bg-brand-500 rounded-xl text-white shadow-sm">
               <i data-lucide="wallet" class="w-5 h-5"></i>
             </div>
             <div>
               <h1 class="text-base font-bold leading-tight">Finanzas del Hogar</h1>
-              <p class="text-xs text-slate-500 dark:text-slate-400">${state.user.nombre} • <span class="capitalize font-semibold">${state.user.rol === 'admin' ? 'Administrador' : 'Miembro'}</span></p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">${state.user.nombre} • <span class="capitalize font-semibold text-brand-500">${state.user.rol === 'admin' ? 'Administrador' : 'Miembro'}</span></p>
             </div>
           </div>
           <div class="flex items-center space-x-2">
-            <button onclick="toggleDarkMode()" class="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg">
+            <button onclick="toggleDarkMode()" title="Cambiar tema" class="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
               <i data-lucide="${state.darkMode ? 'sun' : 'moon'}" class="w-5 h-5"></i>
             </button>
-            <button onclick="handleLogout()" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg">
+            <button onclick="handleLogout()" title="Cerrar sesión" class="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors">
               <i data-lucide="log-out" class="w-5 h-5"></i>
             </button>
           </div>
@@ -205,25 +237,20 @@
 
     function renderBottomNav() {
       return `
-        <nav class="sm:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-around p-2 z-20">
-          <button onclick="switchView('dashboard')" class="flex flex-col items-center text-xs p-1 ${state.view === 'dashboard' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
+        <nav class="sm:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex justify-around p-2 z-30 shadow-lg">
+          <button type="button" onclick="switchView('dashboard')" class="flex flex-col items-center text-xs p-1 ${state.view === 'dashboard' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
             <i data-lucide="layout-dashboard" class="w-5 h-5 mb-0.5"></i> Resumen
           </button>
           ${state.user.rol === 'admin' ? `
-            <button onclick="switchView('members')" class="flex flex-col items-center text-xs p-1 ${state.view === 'members' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
+            <button type="button" onclick="switchView('members')" class="flex flex-col items-center text-xs p-1 ${state.view === 'members' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
               <i data-lucide="users" class="w-5 h-5 mb-0.5"></i> Miembros
             </button>
           ` : ''}
-          <button onclick="switchView('reports')" class="flex flex-col items-center text-xs p-1 ${state.view === 'reports' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
+          <button type="button" onclick="switchView('reports')" class="flex flex-col items-center text-xs p-1 ${state.view === 'reports' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
             <i data-lucide="bar-chart-3" class="w-5 h-5 mb-0.5"></i> Reportes
           </button>
         </nav>
       `;
-    }
-
-    function switchView(viewName) {
-      state.view = viewName;
-      renderApp();
     }
 
     // --- DASHBOARD ---
@@ -245,14 +272,6 @@
       if (pctConsumido > 90) colorBarra = 'bg-rose-500';
 
       return `
-        <div class="hidden sm:flex mb-6 space-x-2">
-          <button onclick="switchView('dashboard')" class="px-4 py-2 rounded-lg font-medium text-sm ${state.view === 'dashboard' ? 'bg-brand-500 text-white' : 'bg-slate-200 dark:bg-slate-800'}">Dashboard</button>
-          ${state.user.rol === 'admin' ? `
-            <button onclick="switchView('members')" class="px-4 py-2 rounded-lg font-medium text-sm ${state.view === 'members' ? 'bg-brand-500 text-white' : 'bg-slate-200 dark:bg-slate-800'}">Gestión Miembros</button>
-          ` : ''}
-          <button onclick="switchView('reports')" class="px-4 py-2 rounded-lg font-medium text-sm ${state.view === 'reports' ? 'bg-brand-500 text-white' : 'bg-slate-200 dark:bg-slate-800'}">Reportes y Exportación</button>
-        </div>
-
         ${state.user.rol === 'member' ? `
           <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200 dark:border-slate-800 mb-6 shadow-sm">
             <div class="flex justify-between items-start mb-3">
@@ -262,7 +281,7 @@
                 <p class="text-xs text-slate-500">Disponible de Bs. ${creditoPersonal.toFixed(2)}</p>
               </div>
               <button onclick="openModal('modal-gasto')" class="tap-target bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center shadow-sm">
-                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> Gasto
+                <i data-lucide="plus" class="w-4 h-4 mr-1"></i> Registrar Gasto
               </button>
             </div>
             <div class="space-y-1">
@@ -278,19 +297,19 @@
         ` : ''}
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <span class="text-xs text-slate-500">Saldo Real en Caja</span>
             <p class="text-lg sm:text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">Bs. ${saldoCajaReal.toFixed(2)}</p>
           </div>
-          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <span class="text-xs text-slate-500">Fondo sin Asignar</span>
             <p class="text-lg sm:text-xl font-bold ${fondoLibre >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-500'} mt-1">Bs. ${fondoLibre.toFixed(2)}</p>
           </div>
-          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <span class="text-xs text-slate-500">Ingresos Totales</span>
             <p class="text-lg sm:text-xl font-bold mt-1">Bs. ${totalIngresos.toFixed(2)}</p>
           </div>
-          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <span class="text-xs text-slate-500">Gastos Totales</span>
             <p class="text-lg sm:text-xl font-bold text-rose-600 dark:text-rose-400 mt-1">Bs. ${totalGastos.toFixed(2)}</p>
           </div>
@@ -299,7 +318,7 @@
         ${state.user.rol === 'admin' ? `
           <div class="flex flex-wrap gap-2 mb-6">
             <button onclick="openModal('modal-ingreso')" class="tap-target bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center shadow-sm">
-              <i data-lucide="arrow-down-left" class="w-4 h-4 mr-1.5"></i> Registrar Ingreso
+              <i data-lucide="arrow-down-left" class="w-4 h-4 mr-1.5"></i> Registrar Ingreso Central
             </button>
             <button onclick="openModal('modal-gasto')" class="tap-target bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center shadow-sm">
               <i data-lucide="arrow-up-right" class="w-4 h-4 mr-1.5"></i> Registrar Consumo
@@ -310,7 +329,7 @@
           </div>
         ` : ''}
 
-        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm">
           <h3 class="font-bold text-sm mb-3">Últimos Consumos Registrados</h3>
           <div class="divide-y divide-slate-100 dark:divide-slate-800">
             ${state.expenses.slice(0, 10).map(g => `
@@ -326,19 +345,22 @@
                 </div>
                 <span class="font-bold text-sm text-rose-600">-Bs. ${Number(g.monto).toFixed(2)}</span>
               </div>
-            `).join('') || '<p class="text-sm text-slate-400 py-4 text-center">No hay gastos registrados</p>'}
+            `).join('') || '<p class="text-sm text-slate-400 py-4 text-center">No hay gastos registrados aún</p>'}
           </div>
         </div>
       `;
     }
 
-    // --- MIEMBROS ---
+    // --- GESTIÓN DE MIEMBROS ---
     function renderMembersView() {
       return `
         <div class="flex justify-between items-center mb-6">
-          <h2 class="text-xl font-bold">Gestión de Miembros</h2>
-          <button onclick="openModal('modal-crear-usuario')" class="bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center">
-            <i data-lucide="user-plus" class="w-4 h-4 mr-1.5"></i> Nuevo Miembro
+          <div>
+            <h2 class="text-xl font-bold">Gestión de Usuarios</h2>
+            <p class="text-xs text-slate-500">Administra cuentas, nombres, contraseñas y saldos</p>
+          </div>
+          <button onclick="openModal('modal-crear-usuario')" class="bg-brand-500 hover:bg-brand-600 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center shadow-sm">
+            <i data-lucide="user-plus" class="w-4 h-4 mr-1.5"></i> Nuevo Usuario
           </button>
         </div>
 
@@ -347,14 +369,14 @@
             const gastado = state.expenses.filter(g => g.usuario_id === m.id).reduce((a, b) => a + Number(b.monto), 0);
             const disponible = Number(m.credito_asignado) - gastado;
             return `
-              <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+              <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between shadow-sm">
                 <div>
                   <div class="flex justify-between items-start">
                     <div>
-                      <h4 class="font-bold text-base">${m.nombre}</h4>
-                      <p class="text-xs text-slate-400">@${m.username} • <span class="uppercase font-semibold">${m.rol}</span></p>
+                      <h4 class="font-bold text-base text-slate-900 dark:text-slate-100">${m.nombre}</h4>
+                      <p class="text-xs text-slate-400">@${m.username} • <span class="uppercase font-semibold text-brand-500">${m.rol}</span></p>
                     </div>
-                    <span class="text-xs px-2 py-0.5 rounded-full ${m.esta_bloqueado ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600'}">
+                    <span class="text-xs px-2 py-0.5 rounded-full ${m.esta_bloqueado ? 'bg-red-100 text-red-600 dark:bg-red-950/50' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50'}">
                       ${m.esta_bloqueado ? 'Bloqueado' : 'Activo'}
                     </span>
                   </div>
@@ -375,15 +397,18 @@
                   </div>
                 </div>
 
-                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end space-x-2">
-                  <button onclick="openModalRecargar('${m.id}', '${m.nombre}')" class="p-1.5 text-xs text-brand-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
-                    Recargar
+                <div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap justify-end gap-1.5">
+                  <button onclick="openModalEditarUsuario('${m.id}')" class="p-1.5 text-xs text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded flex items-center">
+                    <i data-lucide="edit-3" class="w-3.5 h-3.5 mr-1"></i> Editar
+                  </button>
+                  <button onclick="openModalRecargar('${m.id}', '${m.nombre}')" class="p-1.5 text-xs text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded flex items-center">
+                    <i data-lucide="dollar-sign" class="w-3.5 h-3.5 mr-0.5"></i> Saldo
                   </button>
                   <button onclick="toggleBloqueoUsuario('${m.id}', ${m.esta_bloqueado})" class="p-1.5 text-xs ${m.esta_bloqueado ? 'text-emerald-600' : 'text-amber-500'} hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
                     ${m.esta_bloqueado ? 'Desbloquear' : 'Bloquear'}
                   </button>
                   ${m.username !== 'admin' ? `
-                    <button onclick="eliminarUsuario('${m.id}')" class="p-1.5 text-xs text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded">
+                    <button onclick="eliminarUsuario('${m.id}')" class="p-1.5 text-xs text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded">
                       Eliminar
                     </button>
                   ` : ''}
@@ -399,18 +424,21 @@
     function renderReportsView() {
       return `
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <h2 class="text-xl font-bold">Reportes y Estadísticas</h2>
+          <div>
+            <h2 class="text-xl font-bold">Reportes y Estadísticas</h2>
+            <p class="text-xs text-slate-500">Visualiza gastos y exporta datos del sistema</p>
+          </div>
           <div class="flex space-x-2">
-            <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center">
+            <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center shadow-sm">
               <i data-lucide="file-spreadsheet" class="w-4 h-4 mr-1"></i> Excel
             </button>
-            <button onclick="exportToPDF()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center">
+            <button onclick="exportToPDF()" class="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center shadow-sm">
               <i data-lucide="file-text" class="w-4 h-4 mr-1"></i> PDF
             </button>
           </div>
         </div>
 
-        <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 mb-6 flex flex-wrap gap-3">
+        <div class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 mb-6 flex flex-wrap gap-3 shadow-sm">
           <select id="filter-range" onchange="updateFilters()" class="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2">
             <option value="this_month">Este Mes</option>
             <option value="last_7">Últimos 7 días</option>
@@ -429,11 +457,11 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Gastos por Categoría</h4>
             <div class="relative h-64"><canvas id="chartCategorias"></canvas></div>
           </div>
-          <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
+          <div class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Gastos por Miembro</h4>
             <div class="relative h-64"><canvas id="chartMiembros"></canvas></div>
           </div>
@@ -467,7 +495,6 @@
     }
 
     function postRenderCharts() {
-      if (state.view !== 'reports') return;
       const filtered = getFilteredExpenses();
 
       const catMap = {};
@@ -487,8 +514,11 @@
         window.myChartCat = new Chart(ctxCat, {
           type: 'doughnut',
           data: {
-            labels: catLabels,
-            datasets: [{ data: catData, backgroundColor: catColors }]
+            labels: catLabels.length ? catLabels : ['Sin datos'],
+            datasets: [{ 
+              data: catData.length ? catData : [1], 
+              backgroundColor: catColors.length ? catColors : ['#cbd5e1'] 
+            }]
           },
           options: { responsive: true, maintainAspectRatio: false }
         });
@@ -538,7 +568,7 @@
               </div>
               <div>
                 <label class="text-xs font-semibold text-slate-500">Descripción</label>
-                <input name="descripcion" type="text" required placeholder="Ej. Compra de verduras" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+                <input name="descripcion" type="text" required placeholder="Ej. Compra en el mercado" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
               </div>
               <div>
                 <label class="text-xs font-semibold text-slate-500">Fecha</label>
@@ -583,19 +613,19 @@
 
         <div id="modal-crear-usuario" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
-            <h3 class="font-bold text-lg mb-4">Crear Miembro de la Familia</h3>
+            <h3 class="font-bold text-lg mb-4">Crear Nuevo Usuario</h3>
             <form onsubmit="handleGuardarUsuario(event)" class="space-y-4">
               <div>
                 <label class="text-xs font-semibold text-slate-500">Nombre Completo</label>
-                <input name="nombre" type="text" required placeholder="Ej. Melina Perez" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+                <input name="nombre" type="text" required placeholder="Ej. Juan Pérez" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
               </div>
               <div>
-                <label class="text-xs font-semibold text-slate-500">Username (sin @)</label>
-                <input name="username" type="text" autocapitalize="none" required placeholder="melina" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+                <label class="text-xs font-semibold text-slate-500">Nombre de Usuario (sin @)</label>
+                <input name="username" type="text" autocapitalize="none" required placeholder="ej. juan" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
               </div>
               <div>
-                <label class="text-xs font-semibold text-slate-500">PIN (4 dígitos)</label>
-                <input name="pin" type="password" inputmode="numeric" maxlength="4" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm tracking-widest text-center" />
+                <label class="text-xs font-semibold text-slate-500">PIN de Acceso (4 dígitos)</label>
+                <input name="pin" type="password" inputmode="numeric" maxlength="4" required placeholder="••••" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm tracking-widest text-center" />
               </div>
               <div>
                 <label class="text-xs font-semibold text-slate-500">Rol</label>
@@ -606,7 +636,41 @@
               </div>
               <div class="flex justify-end space-x-2 pt-2">
                 <button type="button" onclick="closeModal('modal-crear-usuario')" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-500">Cancelar</button>
-                <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white">Crear</button>
+                <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white">Crear Usuario</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="modal-editar-usuario" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
+            <h3 class="font-bold text-lg mb-1">Editar Usuario</h3>
+            <p class="text-xs text-slate-400 mb-4">Modifica los datos del usuario o reasigna su PIN</p>
+            <form onsubmit="handleActualizarUsuario(event)" class="space-y-4">
+              <input type="hidden" id="edit-user-id" name="user_id" />
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Nombre Completo</label>
+                <input id="edit-nombre" name="nombre" type="text" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Nombre de Usuario (sin @)</label>
+                <input id="edit-username" name="username" type="text" autocapitalize="none" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Nuevo PIN (4 dígitos - dejar vacío para mantener)</label>
+                <input id="edit-pin" name="pin" type="password" inputmode="numeric" maxlength="4" placeholder="••••" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm tracking-widest text-center" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Rol</label>
+                <select id="edit-rol" name="rol" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
+                  <option value="member">Miembro</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div id="edit-user-error" class="hidden text-xs text-rose-500 font-medium"></div>
+              <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="closeModal('modal-editar-usuario')" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-500">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white">Guardar Cambios</button>
               </div>
             </form>
           </div>
@@ -614,12 +678,12 @@
 
         <div id="modal-recargar" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
-            <h3 class="font-bold text-base mb-1">Recargar Crédito</h3>
+            <h3 class="font-bold text-base mb-1">Asignar / Recargar Crédito</h3>
             <p id="recargar-nombre" class="text-xs text-slate-400 mb-4"></p>
             <form onsubmit="handleAsignarCredito(event)" class="space-y-4">
               <input type="hidden" id="recargar-user-id" name="user_id" />
               <div>
-                <label class="text-xs font-semibold text-slate-500">Nuevo Crédito Total Asignado (Bs.)</label>
+                <label class="text-xs font-semibold text-slate-500">Nuevo Presupuesto Total (Bs.)</label>
                 <input name="credito" type="number" step="0.01" required min="0" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold" />
               </div>
               <div class="flex justify-end space-x-2 pt-2">
@@ -632,12 +696,12 @@
       `;
     }
 
-    // --- ACCIONES SUPABASE ---
+    // --- ACCIONES DE FORMULARIOS ---
     async function handleGuardarGasto(e) {
       e.preventDefault();
       const form = e.target;
       const errorEl = document.getElementById('gasto-error');
-      errorEl.classList.add('hidden');
+      if (errorEl) errorEl.classList.add('hidden');
 
       const payload = {
         p_usuario_id: state.user.id,
@@ -649,9 +713,11 @@
 
       const { data, error } = await sbClient.rpc('registrar_gasto_con_validacion', payload);
 
-      if (error || !data.success) {
-        errorEl.textContent = data ? data.message : 'Error al registrar el gasto';
-        errorEl.classList.remove('hidden');
+      if (error || (data && !data.success)) {
+        if (errorEl) {
+          errorEl.textContent = data ? data.message : 'Error al registrar el consumo';
+          errorEl.classList.remove('hidden');
+        }
         return;
       }
 
@@ -688,6 +754,54 @@
       await fetchData();
     }
 
+    function openModalEditarUsuario(id) {
+      const u = state.members.find(m => m.id === id);
+      if (!u) return;
+      document.getElementById('edit-user-id').value = u.id;
+      document.getElementById('edit-nombre').value = u.nombre;
+      document.getElementById('edit-username').value = u.username;
+      document.getElementById('edit-rol').value = u.rol;
+      document.getElementById('edit-pin').value = '';
+      const err = document.getElementById('edit-user-error');
+      if (err) err.classList.add('hidden');
+      openModal('modal-editar-usuario');
+    }
+
+    async function handleActualizarUsuario(e) {
+      e.preventDefault();
+      const form = e.target;
+      const id = form.user_id.value;
+      const nombre = form.nombre.value.trim();
+      const username = form.username.value.trim().toLowerCase();
+      const rol = form.rol.value;
+      const pin = form.pin.value.trim();
+      const err = document.getElementById('edit-user-error');
+
+      const updateData = { nombre, username, rol };
+      if (pin.length > 0) {
+        if (pin.length !== 4) {
+          if (err) {
+            err.textContent = 'El PIN debe contener exactamente 4 dígitos';
+            err.classList.remove('hidden');
+          }
+          return;
+        }
+        updateData.pin_hash = await sha256(pin);
+      }
+
+      const { error } = await sbClient.from('usuarios').update(updateData).eq('id', id);
+      if (error) {
+        if (err) {
+          err.textContent = 'Error al actualizar usuario: ' + error.message;
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      closeModal('modal-editar-usuario');
+      await fetchData();
+    }
+
     async function handleAsignarCredito(e) {
       e.preventDefault();
       const form = e.target;
@@ -705,14 +819,14 @@
     }
 
     async function eliminarUsuario(id) {
-      if (confirm('¿Seguro que deseas eliminar este miembro? Se borrarán sus consumos asociados.')) {
+      if (confirm('¿Seguro que deseas eliminar este usuario? Sus datos quedarán desvinculados.')) {
         await sbClient.from('usuarios').delete().eq('id', id);
         await fetchData();
       }
     }
 
     async function resetSystem() {
-      if (confirm('ADVERTENCIA: Se borrarán todos los ingresos y gastos registrados. ¿Deseas continuar?')) {
+      if (confirm('ADVERTENCIA: Se borrarán todos los ingresos y gastos registrados en la base de datos. ¿Deseas continuar?')) {
         await Promise.all([
           sbClient.from('gastos').delete().neq('monto', -1),
           sbClient.from('ingresos').delete().neq('monto', -1)
@@ -721,12 +835,18 @@
       }
     }
 
-    // --- UTILIDADES ---
-    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
-    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+    // --- UTILIDADES DE VENTANAS ---
+    function openModal(id) { 
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('hidden'); 
+    }
+    function closeModal(id) { 
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden'); 
+    }
     function openModalRecargar(id, nombre) {
       document.getElementById('recargar-user-id').value = id;
-      document.getElementById('recargar-nombre').textContent = 'Miembro: ' + nombre;
+      document.getElementById('recargar-nombre').textContent = 'Usuario: ' + nombre;
       openModal('modal-recargar');
     }
 
@@ -753,8 +873,8 @@
 
       const tableData = getFilteredExpenses().map(g => [
         g.fecha,
-        g.usuarios?.nombre,
-        g.categorias?.nombre,
+        g.usuarios?.nombre || 'N/A',
+        g.categorias?.nombre || 'General',
         g.descripcion,
         `Bs. ${Number(g.monto).toFixed(2)}`
       ]);
@@ -786,7 +906,7 @@
                 <label class="text-xs font-semibold text-slate-500">Usuario</label>
                 <div class="relative mt-1">
                   <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">@</span>
-                  <input name="username" type="text" autocapitalize="none" autocorrect="off" required placeholder="admin o melina" class="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+                  <input name="username" type="text" autocapitalize="none" autocorrect="off" required placeholder="ej. usuario" class="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
                 </div>
               </div>
 
