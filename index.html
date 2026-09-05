@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Finanzas del Hogar</title>
   
+  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -19,9 +20,13 @@
     }
   </script>
 
+  <!-- Supabase JS -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SheetJS & jsPDF -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
@@ -37,12 +42,10 @@
 
   <script>
     // ==========================================
-    // 1. CONFIGURACIÓN SUPABASE CON TUS CREDENCIALES
+    // 1. CONFIGURACIÓN SUPABASE
     // ==========================================
     const SUPABASE_URL = "https://ioagcqakgsldsxzualea.supabase.co";
     const SUPABASE_ANON_KEY = "sb_publishable_bfGeIRo6S-dYpmi-nVWNrg_xFSab8kv";
-    
-    // Instancia del cliente Supabase
     const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ==========================================
@@ -51,7 +54,7 @@
     const state = {
       user: JSON.parse(localStorage.getItem('hogar_user')) || null,
       darkMode: localStorage.getItem('hogar_dark') === 'true',
-      view: 'dashboard', // dashboard | members | reports
+      view: 'dashboard', // dashboard | members | incomes | reports
       categories: [],
       members: [],
       expenses: [],
@@ -83,10 +86,10 @@
       state.loading = true;
       try {
         const [catRes, userRes, expRes, incRes] = await Promise.all([
-          sbClient.from('categorias').select('*'),
+          sbClient.from('categorias').select('*').order('nombre'),
           sbClient.from('usuarios').select('*').order('nombre'),
-          sbClient.from('gastos').select('*, usuarios(nombre, username), categorias(nombre, color, icono)').order('fecha', { ascending: false }),
-          sbClient.from('ingresos').select('*').order('fecha', { ascending: false })
+          sbClient.from('gastos').select('*, usuarios(nombre, username), categorias(nombre, color, icono)').order('fecha', { ascending: false }).order('created_at', { ascending: false }),
+          sbClient.from('ingresos').select('*').order('fecha', { ascending: false }).order('created_at', { ascending: false })
         ]);
 
         state.categories = catRes.data || [];
@@ -94,7 +97,6 @@
         state.expenses = expRes.data || [];
         state.incomes = incRes.data || [];
 
-        // Si es miembro o admin, actualizar la sesión activa
         const freshMe = state.members.find(m => m.id === state.user.id);
         if (freshMe) {
           state.user = freshMe;
@@ -172,16 +174,19 @@
 
     function renderNavigationTabs() {
       return `
-        <div class="flex items-center space-x-2 mb-6 border-b border-slate-200 dark:border-slate-800 pb-3">
-          <button type="button" onclick="switchView('dashboard')" class="px-4 py-2 rounded-xl font-medium text-sm transition-colors ${state.view === 'dashboard' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+        <div class="flex items-center space-x-2 mb-6 border-b border-slate-200 dark:border-slate-800 pb-3 overflow-x-auto">
+          <button type="button" onclick="switchView('dashboard')" class="px-4 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-colors ${state.view === 'dashboard' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
             Dashboard
           </button>
           ${state.user.rol === 'admin' ? `
-            <button type="button" onclick="switchView('members')" class="px-4 py-2 rounded-xl font-medium text-sm transition-colors ${state.view === 'members' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+            <button type="button" onclick="switchView('incomes')" class="px-4 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-colors ${state.view === 'incomes' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+              Gestión Ingresos
+            </button>
+            <button type="button" onclick="switchView('members')" class="px-4 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-colors ${state.view === 'members' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
               Gestión Miembros
             </button>
           ` : ''}
-          <button type="button" onclick="switchView('reports')" class="px-4 py-2 rounded-xl font-medium text-sm transition-colors ${state.view === 'reports' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
+          <button type="button" onclick="switchView('reports')" class="px-4 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-colors ${state.view === 'reports' ? 'bg-brand-500 text-white shadow-sm' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}">
             Reportes y Exportación
           </button>
         </div>
@@ -198,6 +203,7 @@
           <main class="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 pb-24">
             ${renderNavigationTabs()}
             ${state.view === 'dashboard' ? renderDashboard() : ''}
+            ${state.view === 'incomes' && state.user.rol === 'admin' ? renderIncomesView() : ''}
             ${state.view === 'members' && state.user.rol === 'admin' ? renderMembersView() : ''}
             ${state.view === 'reports' ? renderReportsView() : ''}
           </main>
@@ -242,6 +248,9 @@
             <i data-lucide="layout-dashboard" class="w-5 h-5 mb-0.5"></i> Resumen
           </button>
           ${state.user.rol === 'admin' ? `
+            <button type="button" onclick="switchView('incomes')" class="flex flex-col items-center text-xs p-1 ${state.view === 'incomes' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
+              <i data-lucide="arrow-down-left" class="w-5 h-5 mb-0.5"></i> Ingresos
+            </button>
             <button type="button" onclick="switchView('members')" class="flex flex-col items-center text-xs p-1 ${state.view === 'members' ? 'text-brand-500 font-bold' : 'text-slate-500'}">
               <i data-lucide="users" class="w-5 h-5 mb-0.5"></i> Miembros
             </button>
@@ -269,7 +278,7 @@
 
       let colorBarra = 'bg-emerald-500';
       if (pctConsumido > 70) colorBarra = 'bg-amber-500';
-      if (pctConsumido > 90) colorBarra = 'bg-rose-500';
+      if (pctConsumido > 90 || saldoDisponiblePersonal < 0) colorBarra = 'bg-rose-500';
 
       return `
         ${state.user.rol === 'member' ? `
@@ -277,8 +286,12 @@
             <div class="flex justify-between items-start mb-3">
               <div>
                 <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">Tu Presupuesto Asignado</span>
-                <h3 class="text-2xl font-black mt-0.5">Bs. ${saldoDisponiblePersonal.toFixed(2)}</h3>
-                <p class="text-xs text-slate-500">Disponible de Bs. ${creditoPersonal.toFixed(2)}</p>
+                <h3 class="text-2xl font-black mt-0.5 ${saldoDisponiblePersonal < 0 ? 'text-rose-600 dark:text-rose-400' : ''}">
+                  Bs. ${saldoDisponiblePersonal.toFixed(2)}
+                </h3>
+                <p class="text-xs text-slate-500">
+                  ${saldoDisponiblePersonal < 0 ? '⚠️ Has superado tu límite asignado' : `Disponible de Bs. ${creditoPersonal.toFixed(2)}`}
+                </p>
               </div>
               <button onclick="openModal('modal-gasto')" class="tap-target bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center shadow-sm">
                 <i data-lucide="plus" class="w-4 h-4 mr-1"></i> Registrar Gasto
@@ -290,7 +303,7 @@
                 <span>${pctConsumido}%</span>
               </div>
               <div class="w-full bg-slate-100 dark:bg-slate-800 h-3 rounded-full overflow-hidden">
-                <div class="${colorBarra} h-full transition-all duration-300" style="width: ${pctConsumido}%"></div>
+                <div class="${colorBarra} h-full transition-all duration-300" style="width: ${Math.min(100, pctConsumido)}%"></div>
               </div>
             </div>
           </div>
@@ -329,23 +342,89 @@
           </div>
         ` : ''}
 
+        <!-- Lista de Últimos Consumos con Edición / Eliminación -->
         <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-sm">
-          <h3 class="font-bold text-sm mb-3">Últimos Consumos Registrados</h3>
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="font-bold text-sm">Últimos Consumos Registrados</h3>
+            <span class="text-xs text-slate-400">Puedes editar o borrar tus registros</span>
+          </div>
           <div class="divide-y divide-slate-100 dark:divide-slate-800">
-            ${state.expenses.slice(0, 10).map(g => `
-              <div class="py-3 flex items-center justify-between">
-                <div class="flex items-center space-x-3">
-                  <div class="w-9 h-9 rounded-lg flex items-center justify-center text-white" style="background-color: ${g.categorias?.color || '#6b7280'}">
-                    <i data-lucide="${g.categorias?.icono || 'tag'}" class="w-4 h-4"></i>
+            ${state.expenses.slice(0, 15).map(g => {
+              const puedeGestionar = state.user.rol === 'admin' || g.usuario_id === state.user.id;
+              return `
+                <div class="py-3 flex items-center justify-between group">
+                  <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0" style="background-color: ${g.categorias?.color || '#6b7280'}">
+                      <i data-lucide="${g.categorias?.icono || 'tag'}" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <p class="text-sm font-medium leading-none text-slate-800 dark:text-slate-200">${g.descripcion}</p>
+                      <span class="text-xs text-slate-400">${g.usuarios?.nombre || 'Desconocido'} • ${g.categorias?.nombre || 'General'} • ${g.fecha}</span>
+                    </div>
                   </div>
-                  <div>
-                    <p class="text-sm font-medium leading-none">${g.descripcion}</p>
-                    <span class="text-xs text-slate-400">${g.usuarios?.nombre || 'Desconocido'} • ${g.fecha}</span>
+                  <div class="flex items-center space-x-2">
+                    <span class="font-bold text-sm text-rose-600 mr-1">-Bs. ${Number(g.monto).toFixed(2)}</span>
+                    ${puedeGestionar ? `
+                      <button onclick="openModalEditarGasto('${g.id}')" title="Editar Gasto" class="p-1.5 text-slate-400 hover:text-blue-500 rounded hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                      </button>
+                      <button onclick="eliminarGasto('${g.id}')" title="Eliminar Gasto" class="p-1.5 text-slate-400 hover:text-rose-500 rounded hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                      </button>
+                    ` : ''}
                   </div>
                 </div>
-                <span class="font-bold text-sm text-rose-600">-Bs. ${Number(g.monto).toFixed(2)}</span>
-              </div>
-            `).join('') || '<p class="text-sm text-slate-400 py-4 text-center">No hay gastos registrados aún</p>'}
+              `;
+            }).join('') || '<p class="text-sm text-slate-400 py-4 text-center">No hay gastos registrados aún</p>'}
+          </div>
+        </div>
+      `;
+    }
+
+    // --- GESTIÓN DE INGRESOS (SOLO ADMIN) ---
+    function renderIncomesView() {
+      return `
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="text-xl font-bold">Gestión de Ingresos</h2>
+            <p class="text-xs text-slate-500">Historial completo del fondo central con opción de edición y corrección</p>
+          </div>
+          <button onclick="openModal('modal-ingreso')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-xl flex items-center shadow-sm">
+            <i data-lucide="plus" class="w-4 h-4 mr-1.5"></i> Nuevo Ingreso
+          </button>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-xs text-slate-500">
+                <tr>
+                  <th class="p-3.5">Fecha</th>
+                  <th class="p-3.5">Fuente / Origen</th>
+                  <th class="p-3.5">Descripción</th>
+                  <th class="p-3.5 text-right">Monto (Bs.)</th>
+                  <th class="p-3.5 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                ${state.incomes.map(inc => `
+                  <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
+                    <td class="p-3.5 text-xs text-slate-400">${inc.fecha}</td>
+                    <td class="p-3.5 font-medium text-slate-800 dark:text-slate-200">${inc.fuente}</td>
+                    <td class="p-3.5 text-slate-600 dark:text-slate-400">${inc.descripcion}</td>
+                    <td class="p-3.5 font-bold text-right text-emerald-600 dark:text-emerald-400">+Bs. ${Number(inc.monto).toFixed(2)}</td>
+                    <td class="p-3.5 text-center whitespace-nowrap">
+                      <button onclick="openModalEditarIngreso('${inc.id}')" title="Editar Ingreso" class="p-1.5 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded inline-flex items-center text-xs mr-1">
+                        <i data-lucide="pencil" class="w-3.5 h-3.5 mr-0.5"></i> Editar
+                      </button>
+                      <button onclick="eliminarIngreso('${inc.id}')" title="Eliminar Ingreso" class="p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded inline-flex items-center text-xs">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5 mr-0.5"></i> Borrar
+                      </button>
+                    </td>
+                  </tr>
+                `).join('') || '<tr><td colspan="5" class="text-center text-slate-400 py-6">No hay ingresos registrados</td></tr>'}
+              </tbody>
+            </table>
           </div>
         </div>
       `;
@@ -392,7 +471,7 @@
                     </div>
                     <div class="flex justify-between">
                       <span class="text-slate-500">Disponible:</span>
-                      <span class="font-bold text-emerald-600">Bs. ${disponible.toFixed(2)}</span>
+                      <span class="font-bold ${disponible < 0 ? 'text-rose-600' : 'text-emerald-600'}">Bs. ${disponible.toFixed(2)}</span>
                     </div>
                   </div>
                 </div>
@@ -426,7 +505,7 @@
         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
             <h2 class="text-xl font-bold">Reportes y Estadísticas</h2>
-            <p class="text-xs text-slate-500">Visualiza gastos y exporta datos del sistema</p>
+            <p class="text-xs text-slate-500">Visualiza consumos, exporta a PDF/Excel y administra registros</p>
           </div>
           <div class="flex space-x-2">
             <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2 rounded-xl flex items-center shadow-sm">
@@ -466,6 +545,55 @@
             <div class="relative h-64"><canvas id="chartMiembros"></canvas></div>
           </div>
         </div>
+
+        <!-- Tabla detallada de gastos filtrados con botones de edición -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div class="p-4 border-b border-slate-200 dark:border-slate-800 font-bold text-sm">
+            Detalle de Consumos Filtrados
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+              <thead class="bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-500 border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th class="p-3">Fecha</th>
+                  <th class="p-3">Miembro</th>
+                  <th class="p-3">Categoría</th>
+                  <th class="p-3">Descripción</th>
+                  <th class="p-3 text-right">Monto</th>
+                  <th class="p-3 text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                ${getFilteredExpenses().map(g => {
+                  const puedeGestionar = state.user.rol === 'admin' || g.usuario_id === state.user.id;
+                  return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                      <td class="p-3 text-xs text-slate-400">${g.fecha}</td>
+                      <td class="p-3 font-medium">${g.usuarios?.nombre || 'N/A'}</td>
+                      <td class="p-3">
+                        <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full text-white" style="background-color: ${g.categorias?.color || '#64748b'}">
+                          ${g.categorias?.nombre || 'General'}
+                        </span>
+                      </td>
+                      <td class="p-3 text-slate-600 dark:text-slate-300">${g.descripcion}</td>
+                      <td class="p-3 font-bold text-right text-rose-600">-Bs. ${Number(g.monto).toFixed(2)}</td>
+                      <td class="p-3 text-center whitespace-nowrap">
+                        ${puedeGestionar ? `
+                          <button onclick="openModalEditarGasto('${g.id}')" title="Editar" class="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded mr-1">
+                            <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                          </button>
+                          <button onclick="eliminarGasto('${g.id}')" title="Borrar" class="p-1 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                          </button>
+                        ` : '<span class="text-xs text-slate-400">-</span>'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('') || '<tr><td colspan="6" class="text-center py-5 text-slate-400">No hay registros con los filtros seleccionados</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
       `;
     }
 
@@ -491,7 +619,7 @@
       state.filter.range = document.getElementById('filter-range').value;
       state.filter.memberId = document.getElementById('filter-member').value;
       state.filter.catId = document.getElementById('filter-cat').value;
-      postRenderCharts();
+      renderApp();
     }
 
     function postRenderCharts() {
@@ -549,16 +677,21 @@
       }
     }
 
-    // --- MODALES ---
+    // --- MODALES COMPLETOS ---
     function renderModals() {
       return `
+        <!-- Modal Nuevo Gasto -->
         <div id="modal-gasto" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-4">Registrar Consumo / Gasto</h3>
             <form onsubmit="handleGuardarGasto(event)" class="space-y-4">
               <div>
                 <label class="text-xs font-semibold text-slate-500">Monto (Bs.)</label>
-                <input name="monto" type="number" step="0.01" required min="0.1" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold" />
+                <input name="monto" id="gasto-nuevo-monto" oninput="checkAdvertenciaSaldo(this.value)" type="number" step="0.01" required min="0.1" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold" />
+              </div>
+              <!-- Aviso de advertencia si supera saldo -->
+              <div id="gasto-warning" class="hidden p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 font-medium">
+                ⚠️ Este monto supera tu saldo disponible. El gasto se registrará pero quedarás con saldo negativo.
               </div>
               <div>
                 <label class="text-xs font-semibold text-slate-500">Categoría</label>
@@ -583,6 +716,40 @@
           </div>
         </div>
 
+        <!-- Modal Editar Gasto -->
+        <div id="modal-editar-gasto" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
+            <h3 class="font-bold text-lg mb-4">Modificar Consumo</h3>
+            <form onsubmit="handleActualizarGasto(event)" class="space-y-4">
+              <input type="hidden" id="edit-gasto-id" name="gasto_id" />
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Monto (Bs.)</label>
+                <input id="edit-gasto-monto" name="monto" type="number" step="0.01" required min="0.1" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Categoría</label>
+                <select id="edit-gasto-cat" name="categoria_id" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm">
+                  ${state.categories.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Descripción</label>
+                <input id="edit-gasto-desc" name="descripcion" type="text" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Fecha</label>
+                <input id="edit-gasto-fecha" name="fecha" type="date" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div id="edit-gasto-error" class="hidden text-xs text-rose-500 font-medium"></div>
+              <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="closeModal('modal-editar-gasto')" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-500">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white">Guardar Cambios</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Modal Nuevo Ingreso -->
         <div id="modal-ingreso" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-4">Registrar Ingreso Central</h3>
@@ -592,11 +759,11 @@
                 <input name="monto" type="number" step="0.01" required min="0.1" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold" />
               </div>
               <div>
-                <label class="text-xs font-semibold text-slate-500">Fuente</label>
-                <input name="fuente" type="text" required placeholder="Ej. Sueldo, Bono, Venta" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+                <label class="text-xs font-semibold text-slate-500">Fuente / Origen</label>
+                <input name="fuente" type="text" required placeholder="Ej. Sueldo, Venta, Bono" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
               </div>
               <div>
-                <label class="text-xs font-semibold text-slate-500">Descripción</label>
+                <label class="text-xs font-semibold text-slate-500">Descripción / Detalle</label>
                 <input name="descripcion" type="text" required placeholder="Detalle adicional" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
               </div>
               <div>
@@ -611,6 +778,38 @@
           </div>
         </div>
 
+        <!-- Modal Editar Ingreso (Admin) -->
+        <div id="modal-editar-ingreso" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
+            <h3 class="font-bold text-lg mb-4">Modificar Ingreso Central</h3>
+            <form onsubmit="handleActualizarIngreso(event)" class="space-y-4">
+              <input type="hidden" id="edit-ingreso-id" name="ingreso_id" />
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Monto (Bs.)</label>
+                <input id="edit-ingreso-monto" name="monto" type="number" step="0.01" required min="0.1" class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-lg font-bold" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Fuente / Origen</label>
+                <input id="edit-ingreso-fuente" name="fuente" type="text" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Descripción / Detalle</label>
+                <input id="edit-ingreso-desc" name="descripcion" type="text" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs font-semibold text-slate-500">Fecha</label>
+                <input id="edit-ingreso-fecha" name="fecha" type="date" required class="w-full mt-1 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm" />
+              </div>
+              <div id="edit-ingreso-error" class="hidden text-xs text-rose-500 font-medium"></div>
+              <div class="flex justify-end space-x-2 pt-2">
+                <button type="button" onclick="closeModal('modal-editar-ingreso')" class="px-4 py-2 rounded-xl text-sm font-medium text-slate-500">Cancelar</button>
+                <button type="submit" class="px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white">Actualizar</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Modal Crear Usuario -->
         <div id="modal-crear-usuario" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-4">Crear Nuevo Usuario</h3>
@@ -642,6 +841,7 @@
           </div>
         </div>
 
+        <!-- Modal Editar Usuario -->
         <div id="modal-editar-usuario" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-lg mb-1">Editar Usuario</h3>
@@ -676,6 +876,7 @@
           </div>
         </div>
 
+        <!-- Modal Recargar Saldo -->
         <div id="modal-recargar" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div class="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-sm p-5 border border-slate-200 dark:border-slate-800 shadow-xl">
             <h3 class="font-bold text-base mb-1">Asignar / Recargar Crédito</h3>
@@ -696,7 +897,26 @@
       `;
     }
 
-    // --- ACCIONES DE FORMULARIOS ---
+    // --- ADVERTENCIA EN TIEMPO REAL ---
+    function checkAdvertenciaSaldo(montoStr) {
+      const monto = parseFloat(montoStr) || 0;
+      const warnEl = document.getElementById('gasto-warning');
+      if (!warnEl) return;
+
+      if (state.user.rol === 'member') {
+        const misGastos = state.expenses.filter(g => g.usuario_id === state.user.id);
+        const totalGastado = misGastos.reduce((acc, g) => acc + Number(g.monto), 0);
+        const disponible = Number(state.user.credito_asignado || 0) - totalGastado;
+
+        if (monto > disponible) {
+          warnEl.classList.remove('hidden');
+        } else {
+          warnEl.classList.add('hidden');
+        }
+      }
+    }
+
+    // --- GASTOS: GUARDAR, EDITAR Y BORRAR ---
     async function handleGuardarGasto(e) {
       e.preventDefault();
       const form = e.target;
@@ -721,10 +941,65 @@
         return;
       }
 
+      if (data && data.sobregiro) {
+        alert(data.message);
+      }
+
       closeModal('modal-gasto');
       await fetchData();
     }
 
+    function openModalEditarGasto(id) {
+      const g = state.expenses.find(item => item.id === id);
+      if (!g) return;
+      document.getElementById('edit-gasto-id').value = g.id;
+      document.getElementById('edit-gasto-monto').value = g.monto;
+      document.getElementById('edit-gasto-cat').value = g.categoria_id;
+      document.getElementById('edit-gasto-desc').value = g.descripcion;
+      document.getElementById('edit-gasto-fecha').value = g.fecha;
+      const err = document.getElementById('edit-gasto-error');
+      if (err) err.classList.add('hidden');
+      openModal('modal-editar-gasto');
+    }
+
+    async function handleActualizarGasto(e) {
+      e.preventDefault();
+      const form = e.target;
+      const id = form.gasto_id.value;
+      const monto = parseFloat(form.monto.value);
+      const categoria_id = form.categoria_id.value;
+      const descripcion = form.descripcion.value.trim();
+      const fecha = form.fecha.value;
+
+      const { error } = await sbClient.from('gastos').update({
+        monto, categoria_id, descripcion, fecha
+      }).eq('id', id);
+
+      if (error) {
+        const err = document.getElementById('edit-gasto-error');
+        if (err) {
+          err.textContent = 'Error al actualizar gasto: ' + error.message;
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      closeModal('modal-editar-gasto');
+      await fetchData();
+    }
+
+    async function eliminarGasto(id) {
+      if (confirm('¿Deseas eliminar este registro de gasto?')) {
+        const { error } = await sbClient.from('gastos').delete().eq('id', id);
+        if (error) {
+          alert('Error al eliminar: ' + error.message);
+        } else {
+          await fetchData();
+        }
+      }
+    }
+
+    // --- INGRESOS: GUARDAR, EDITAR Y BORRAR ---
     async function handleGuardarIngreso(e) {
       e.preventDefault();
       const form = e.target;
@@ -738,6 +1013,57 @@
       await fetchData();
     }
 
+    function openModalEditarIngreso(id) {
+      const inc = state.incomes.find(item => item.id === id);
+      if (!inc) return;
+      document.getElementById('edit-ingreso-id').value = inc.id;
+      document.getElementById('edit-ingreso-monto').value = inc.monto;
+      document.getElementById('edit-ingreso-fuente').value = inc.fuente;
+      document.getElementById('edit-ingreso-desc').value = inc.descripcion;
+      document.getElementById('edit-ingreso-fecha').value = inc.fecha;
+      const err = document.getElementById('edit-ingreso-error');
+      if (err) err.classList.add('hidden');
+      openModal('modal-editar-ingreso');
+    }
+
+    async function handleActualizarIngreso(e) {
+      e.preventDefault();
+      const form = e.target;
+      const id = form.ingreso_id.value;
+      const monto = parseFloat(form.monto.value);
+      const fuente = form.fuente.value.trim();
+      const descripcion = form.descripcion.value.trim();
+      const fecha = form.fecha.value;
+
+      const { error } = await sbClient.from('ingresos').update({
+        monto, fuente, descripcion, fecha
+      }).eq('id', id);
+
+      if (error) {
+        const err = document.getElementById('edit-ingreso-error');
+        if (err) {
+          err.textContent = 'Error al actualizar ingreso: ' + error.message;
+          err.classList.remove('hidden');
+        }
+        return;
+      }
+
+      closeModal('modal-editar-ingreso');
+      await fetchData();
+    }
+
+    async function eliminarIngreso(id) {
+      if (confirm('¿Deseas eliminar este registro de ingreso?')) {
+        const { error } = await sbClient.from('ingresos').delete().eq('id', id);
+        if (error) {
+          alert('Error al eliminar: ' + error.message);
+        } else {
+          await fetchData();
+        }
+      }
+    }
+
+    // --- USUARIOS ---
     async function handleGuardarUsuario(e) {
       e.preventDefault();
       const form = e.target;
@@ -819,7 +1145,7 @@
     }
 
     async function eliminarUsuario(id) {
-      if (confirm('¿Seguro que deseas eliminar este usuario? Sus datos quedarán desvinculados.')) {
+      if (confirm('¿Seguro que deseas eliminar este usuario? Sus consumos asociados también se desvincularán.')) {
         await sbClient.from('usuarios').delete().eq('id', id);
         await fetchData();
       }
@@ -835,7 +1161,7 @@
       }
     }
 
-    // --- UTILIDADES DE VENTANAS ---
+    // --- UTILIDADES ---
     function openModal(id) { 
       const el = document.getElementById(id);
       if (el) el.classList.remove('hidden'); 
