@@ -1252,8 +1252,21 @@
     }
 
     // ==========================================
-    // 6. INICIALIZACIÓN
+    // 6. INICIALIZACIÓN Y MANTENIMIENTO
     // ==========================================
+    
+    // Función para mantener activo Supabase de forma automática al abrir la app
+    async function keepSupabaseAlive() {
+      try {
+        await sbClient.from('categorias').select('id').limit(1);
+      } catch (err) {
+        console.error('Error en keepSupabaseAlive:', err);
+      }
+    }
+
+    // Ejecutar el ping en segundo plano al cargar
+    keepSupabaseAlive();
+
     renderApp();
     if (state.user) {
       fetchData();
