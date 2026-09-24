@@ -1252,13 +1252,24 @@
       `;
     }
 
-    // ==========================================
-    // 6. INICIALIZACIÓN
-    // ==========================================
-    renderApp();
-    if (state.user) {
-      fetchData();
+  // ==========================================
+  // 6. INICIALIZACIÓN Y MANTENIMIENTO
+  // ==========================================
+  
+  // Función de "Ping" para evitar que Supabase pause el proyecto por inactividad
+  async function keepSupabaseAlive() {
+    try {
+      // Hace una consulta ligera a la tabla 'categorias' o cualquier otra para despertar el servidor
+      await sbClient.from('categorias').select('id').limit(1);
+    } catch (err) {
+      console.error('Error en keepSupabaseAlive:', err);
     }
-  </script>
-</body>
-</html>
+  }
+
+  // Ejecutar el ping al cargar la aplicación
+  keepSupabaseAlive();
+
+  renderApp();
+  if (state.user) {
+    fetchData();
+  }
