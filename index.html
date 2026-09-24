@@ -54,7 +54,7 @@
     const state = {
       user: JSON.parse(localStorage.getItem('hogar_user')) || null,
       darkMode: localStorage.getItem('hogar_dark') === 'true',
-      view: 'dashboard', // dashboard | members | incomes | reports
+      view: 'dashboard',
       categories: [],
       members: [],
       expenses: [],
@@ -1254,8 +1254,6 @@
     // ==========================================
     // 6. INICIALIZACIÓN Y MANTENIMIENTO
     // ==========================================
-    
-    // Función para mantener activo Supabase de forma automática al abrir la app
     async function keepSupabaseAlive() {
       try {
         await sbClient.from('categorias').select('id').limit(1);
@@ -1264,7 +1262,6 @@
       }
     }
 
-    // Ejecutar el ping en segundo plano al cargar
     keepSupabaseAlive();
 
     renderApp();
