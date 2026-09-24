@@ -1253,22 +1253,8 @@
     }
 
   // ==========================================
-  // 6. INICIALIZACIÓN Y MANTENIMIENTO
+  // 6. INICIALIZACIÓN
   // ==========================================
-  
-  // Función de "Ping" para evitar que Supabase pause el proyecto por inactividad
-  async function keepSupabaseAlive() {
-    try {
-      // Hace una consulta ligera a la tabla 'categorias' o cualquier otra para despertar el servidor
-      await sbClient.from('categorias').select('id').limit(1);
-    } catch (err) {
-      console.error('Error en keepSupabaseAlive:', err);
-    }
-  }
-
-  // Ejecutar el ping al cargar la aplicación
-  keepSupabaseAlive();
-
   renderApp();
   if (state.user) {
     fetchData();
