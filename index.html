@@ -359,12 +359,11 @@
                     </div>
                     <div>
                       <p class="text-sm font-medium leading-none text-slate-800 dark:text-slate-200">${g.descripcion}</p>
-                      <span class="text-xs text-slate-400">${g.usuarios?.nombre || 'Desconocido'} • ${g.categorias?.nombre || 'General'} • ${g.fecha}</span>
+                      <span class="text-xs text-slate-400">${g.usuarios?.nombre || 'Desconocido'} • ${g.categorias?.nombre \vert{}\vert{} 'General'} • ${g.fecha}</span>
                     </div>
                   </div>
                   <div class="flex items-center space-x-2">
-                    <span class="font-bold text-sm text-rose-600 mr-1">-Bs. ${Number(g.monto).toFixed(2)}</span>
-                    ${puedeGestionar ? `
+                    <span class="font-bold text-sm text-rose-600 mr-1">-Bs. ${Number(g.monto).toFixed(2)}</span>${puedeGestionar ? `
                       <button onclick="openModalEditarGasto('${g.id}')" title="Editar Gasto" class="p-1.5 text-slate-400 hover:text-blue-500 rounded hover:bg-slate-100 dark:hover:bg-slate-800">
                         <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
                       </button>
@@ -1252,10 +1251,13 @@
       `;
     }
 
-  // ==========================================
-  // 6. INICIALIZACIÓN
-  // ==========================================
-  renderApp();
-  if (state.user) {
-    fetchData();
-  }
+    // ==========================================
+    // 6. INICIALIZACIÓN
+    // ==========================================
+    renderApp();
+    if (state.user) {
+      fetchData();
+    }
+  </script>
+</body>
+</html>
